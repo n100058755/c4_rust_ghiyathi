@@ -1,5 +1,6 @@
 mod lexer;
 mod parser;
+mod vm;
 
 fn main() {
     let source = "int main() { return 42; }";
@@ -37,5 +38,19 @@ mod tests {
     fn test_parser() {
         let tokens = tokenize("int main() { return 42; }");
         assert_eq!(parse(&tokens), true);
+    }
+    #[test]
+    fn test_vm_add() {
+        let program = vec![
+            Instruction::IMM(2),
+            Instruction::IMM(3),
+            Instruction::ADD,
+            Instruction::EXIT,
+        ];
+
+        let mut vm = VM::new(program);
+        vm.run();
+
+        assert_eq!(vm.stack, vec![5]);
     }
 }
