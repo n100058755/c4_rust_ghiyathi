@@ -1,5 +1,6 @@
 /// All VM opcodes translated from the original C4 compiler
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// The instruction set for the stack machine
 pub enum Instruction {
     IMM(i64),
     PSH,
@@ -8,9 +9,11 @@ pub enum Instruction {
     MUL,
     DIV,
     MOD,
+    JMP(usize),
+    BZ(usize),
+    BNZ(usize),
     EXIT,
 }
-
 /// The VM structure representing stack machine state
 pub struct VM {
     pub stack: Vec<i64>,
@@ -80,6 +83,24 @@ impl VM {
                         println!("Program exited: stack is empty");
                     }
                     self.running = false;
+                }
+                Instruction::JMP(target) => {
+                    self.pc = target;
+                    continue;
+                }
+                Instruction::BZ(target) => {
+                    let cond = self.stack.pop().unwrap();
+                    if cond == 0 {
+                        self.pc = target;
+                        continue;
+                    }
+                }
+                Instruction::BNZ(target) => {
+                    let cond = self.stack.pop().unwrap();
+                    if cond != 0 {
+                        self.pc = target;
+                        continue;
+                    }
                 }
             }
 
