@@ -1,6 +1,7 @@
 /// Tokenizes a simple C-like source code string into a vector of tokens.
 /// Supports: int, return, identifiers, numbers, and symbols.
 
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Int,
@@ -12,6 +13,9 @@ pub enum Token {
     LBrace,
     RBrace,
     Semicolon,
+    Plus,
+    Star,
+    Minus,
     Unknown(char),
 }
 
@@ -56,6 +60,20 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 }
                 tokens.push(Token::Number(num));
             }
+            '+' => {
+                chars.next();
+                tokens.push(Token::Plus);
+            }
+            '*' => {
+                chars.next();
+                tokens.push(Token::Star);
+            }
+
+            '-' => {
+                chars.next();
+                tokens.push(Token::Minus);
+            }
+
             'a'..='z' | 'A'..='Z' | '_' => {
                 let mut ident = String::new();
                 while let Some(c) = chars.peek() {
@@ -81,3 +99,4 @@ pub fn tokenize(source: &str) -> Vec<Token> {
 
     tokens
 }
+
