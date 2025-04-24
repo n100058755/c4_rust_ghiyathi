@@ -1,6 +1,3 @@
-/// Tokenizes a simple C-like source code string into a vector of tokens.
-/// Supports: int, return, identifiers, numbers, and symbols.
-
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
@@ -16,6 +13,13 @@ pub enum Token {
     Plus,
     Star,
     Minus,
+    Divide,
+    Mod,
+    Equal,
+    Less,
+    Greater,
+    If,
+    Else,
     Unknown(char),
 }
 
@@ -74,6 +78,35 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 tokens.push(Token::Minus);
             }
 
+            '/' => {
+                chars.next();
+                tokens.push(Token::Divide);
+            }
+
+            '%' => {
+                chars.next();
+                tokens.push(Token::Mod);
+            }
+
+            '=' => {
+                chars.next();
+                if let Some('=') = chars.peek() {
+                    chars.next();
+                    tokens.push(Token::Equal); // only '==', not assignment
+                } else {
+                    tokens.push(Token::Unknown('='));
+                }
+            }
+            '<' => {
+                chars.next();
+                tokens.push(Token::Less);
+            }
+            '>' => {
+                chars.next();
+                tokens.push(Token::Greater);
+            }
+
+
             'a'..='z' | 'A'..='Z' | '_' => {
                 let mut ident = String::new();
                 while let Some(c) = chars.peek() {
@@ -87,8 +120,11 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 match ident.as_str() {
                     "int" => tokens.push(Token::Int),
                     "return" => tokens.push(Token::Return),
+                    "if" => tokens.push(Token::If),
+                    "else" => tokens.push(Token::Else),
                     _ => tokens.push(Token::Identifier(ident)),
                 }
+
             }
             _ => {
                 tokens.push(Token::Unknown(ch));
@@ -99,4 +135,3 @@ pub fn tokenize(source: &str) -> Vec<Token> {
 
     tokens
 }
-
