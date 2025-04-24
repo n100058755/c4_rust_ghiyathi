@@ -29,6 +29,9 @@ pub enum Instruction {
     OPEN,
     READ,
     CLOS,
+    EQ, // for ==
+    LT, // for <
+    GT, // for >
 }
 
 pub struct VM {
@@ -204,6 +207,21 @@ impl VM {
                 Instruction::CLOS => {
                     let _ = self.stack.pop();
                     self.stack.push(0); // fake success
+                }
+                Instruction::EQ => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push((a == b) as i64);
+                }
+                Instruction::LT => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push((a < b) as i64);
+                }
+                Instruction::GT => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push((a > b) as i64);
                 }
             }
 
