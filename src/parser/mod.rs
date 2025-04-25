@@ -1,5 +1,6 @@
-use crate::codegen::{ASTNode, Expr};
+use crate::codegen::ASTNode;
 use crate::lexer::Token;
+use crate::Expr;
 use std::iter::Peekable;
 use std::slice::Iter;
 
@@ -16,19 +17,88 @@ pub fn parse(tokens: &[Token]) -> ASTNode {
 
     while let Some(token) = iter.peek() {
         match token {
-            Token::Return | Token::If => {
+            Token::Return | Token::If | Token::While | Token::LBrace | Token::Int | Token::Identifier(_) => {
                 statements.push(parse_stmt(&mut iter));
             }
             Token::RBrace => {
                 iter.next(); // consume '}'
                 break;
             }
-            _ => panic!("Unexpected token inside block: {:?}", token),
+            _ => {
+                println!("DEBUG next token in block: {:?}", token);
+                panic!("Unexpected token inside block: {:?}", token);
+            }
         }
     }
 
     ASTNode::Sequence(statements)
 }
+
+
+
+fn parse_function_def(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
+    expect_token(iter, Token::Int);
+    let name = match iter.next() {
+        Some(Token::Identifier(s)) => s.clone(),
+        other => panic!("Expected function name, got {:?}", other),
+    };
+
+    expect_token(iter, Token::LParen);
+
+    let mut params = Vec::new();
+    while let Some(token) = iter.peek() {
+        match token {
+            Token::Int => {
+                iter.next(); // consume 'int'
+                match iter.next() {
+                    Some(Token::Identifier(name)) => {
+                        params.push(name.clone());
+                        if let Some(Token::Comma) = iter.peek() {
+                            iter.next(); // consume ','
+                        }
+                    }
+                    _ => panic!("Expected parameter name"),
+                }
+            }
+            Token::RParen => {
+                iter.next(); // consume ')'
+                break;
+            }
+            _ => panic!("Unexpected token in parameter list: {:?}", token),
+        }
+    }
+
+    let body = Box::new(parse_block(iter));
+    ASTNode::FunctionDef { name, params, body }
+}
+
+
+fn parse_declaration(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
+    let name = match iter.next() {
+        Some(Token::Identifier(name)) => name.clone(),
+        _ => panic!("Expected variable name"),
+    };
+
+    expect_token(iter, Token::Assign);
+    let expr = parse_expr(iter);
+    expect_token(iter, Token::Semicolon);
+
+    ASTNode::Declaration(name, expr)
+}
+
+fn parse_assignment(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
+    let name = match iter.next() {
+        Some(Token::Identifier(name)) => name.clone(),
+        _ => panic!("Expected variable name"),
+    };
+
+    expect_token(iter, Token::Assign);
+    let expr = parse_expr(iter);
+    expect_token(iter, Token::Semicolon);
+
+    ASTNode::Assignment(name, expr)
+}
+
 
 fn parse_stmt(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     match iter.peek() {
@@ -45,9 +115,36 @@ fn parse_stmt(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
         Some(Token::LBrace) => {
             parse_block(iter)
         }
+        Some(Token::While) => {
+            iter.next(); // consume 'while'
+            parse_while(iter)
+        }
+        Some(Token::Int) => {
+            iter.next(); // consume 'int'
+            parse_declaration(iter)
+        }
+        Some(Token::Identifier(_)) => {
+            parse_assignment(iter)
+        }
+
+
         _ => panic!("Expected statement"),
     }
 }
+
+fn parse_while(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
+    expect_token(iter, Token::LParen);
+    let condition = parse_expr(iter);
+    expect_token(iter, Token::RParen);
+
+    let body = parse_stmt(iter); // handles both single and `{}` blocks
+
+    ASTNode::While {
+        condition,
+        body: Box::new(body),
+    }
+}
+
 
 fn parse_block(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     expect_token(iter, Token::LBrace);
@@ -56,18 +153,24 @@ fn parse_block(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     while let Some(token) = iter.peek() {
         match token {
             Token::RBrace => {
-                iter.next(); // consume '}'
+                iter.next();
                 break;
             }
-            Token::Return | Token::If | Token::LBrace => {
+            Token::Return | Token::If | Token::While | Token::LBrace => {
                 stmts.push(parse_stmt(iter));
             }
-            _ => panic!("Unexpected token in block: {:?}", token),
+            t => {
+                println!("DEBUG next token in block: {:?}", t);
+                panic!("Unexpected token inside block: {:?}", t);
+            }
         }
     }
 
+
     ASTNode::Sequence(stmts)
 }
+
+
 
 
 
@@ -190,6 +293,36 @@ fn parse_mul_div(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
 fn parse_primary(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     match iter.next() {
         Some(Token::Number(n)) => Box::new(Expr::Number(*n)),
+
+        Some(Token::Identifier(name)) => {
+            let name = name.clone();
+
+            if let Some(Token::LParen) = iter.peek() {
+                iter.next(); // consume '('
+                let mut args = Vec::new();
+
+                while let Some(token) = iter.peek() {
+                    if let Token::RParen = token {
+                        break;
+                    }
+
+                    let arg = parse_expr(iter);
+                    args.push(*arg);
+
+                    if let Some(Token::Comma) = iter.peek() {
+                        iter.next(); // consume ','
+                    } else {
+                        break;
+                    }
+                }
+
+                expect_token(iter, Token::RParen);
+                Box::new(Expr::Call(name, args))
+            } else {
+                Box::new(Expr::Var(name))
+            }
+        }
+
         Some(Token::LParen) => {
             let expr = parse_expr(iter);
             match iter.next() {
@@ -197,6 +330,8 @@ fn parse_primary(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
                 _ => panic!("Expected closing parenthesis"),
             }
         }
-        _ => panic!("Expected number or '('"),
+
+        other => panic!("Expected number, variable, or '(', got {:?}", other),
     }
 }
+
