@@ -20,6 +20,9 @@ pub enum Token {
     Greater,
     If,
     Else,
+    While,
+    Assign,
+    Comma,
     Unknown(char),
 }
 
@@ -92,11 +95,12 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 chars.next();
                 if let Some('=') = chars.peek() {
                     chars.next();
-                    tokens.push(Token::Equal); // only '==', not assignment
+                    tokens.push(Token::Equal); // '=='
                 } else {
-                    tokens.push(Token::Unknown('='));
+                    tokens.push(Token::Assign); // '='
                 }
             }
+
             '<' => {
                 chars.next();
                 tokens.push(Token::Less);
@@ -105,6 +109,12 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 chars.next();
                 tokens.push(Token::Greater);
             }
+
+            ',' => {
+                chars.next();
+                tokens.push(Token::Comma);
+            }
+
 
 
             'a'..='z' | 'A'..='Z' | '_' => {
@@ -122,6 +132,7 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                     "return" => tokens.push(Token::Return),
                     "if" => tokens.push(Token::If),
                     "else" => tokens.push(Token::Else),
+                    "while" => tokens.push(Token::While),
                     _ => tokens.push(Token::Identifier(ident)),
                 }
 
