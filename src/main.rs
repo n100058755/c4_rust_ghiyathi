@@ -4,17 +4,33 @@ mod vm;
 mod codegen;
 
 use codegen::{ASTNode, Expr, generate_instructions};
+use std::env;
+use std::fs;
 
+///main function to run the compiler
+///this is the entry point for the C4 Rust compiler and VM
+///reads a C file, tokenizes it, parses it into an AST
+///then generates VM instructions, and runs the program
 fn main() {
-    let tokens = lexer::tokenize("int main() { if (1 < 2) return 42; return 0; }");
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() != 2 {
+        eprintln!("Usage: {} <input.c>", args[0]);
+        std::process::exit(1);
+    }
+
+    let filename = &args[1];
+    let source = fs::read_to_string(filename)
+        .expect("Failed to read source file");
+
+    let tokens = lexer::tokenize(&source);
     let ast = parser::parse(&tokens);
     let program = codegen::generate_instructions(&ast);
     let mut vm = vm::VM::new(program);
     vm.run();
-
-
 }
 
+///tests for the compiler
 #[cfg(test)]
 mod tests {
     use crate::lexer::{tokenize, Token};
@@ -348,26 +364,48 @@ mod tests {
         use crate::codegen::{generate_instructions, ASTNode, Expr};
         use crate::vm::Instruction;
 
-        let ast = ASTNode::Return(Box::new(Expr::Call(
-            "add".to_string(),
-            vec![Expr::Number(2), Expr::Number(3)],
-        )));
+        let ast = ASTNode::Sequence(vec![
+            ASTNode::FunctionDef {
+                name: "add".to_string(),
+                params: vec!["a".to_string(), "b".to_string()],
+                body: Box::new(ASTNode::Return(Box::new(Expr::Add(
+                    Box::new(Expr::Variable("a".to_string())),
+                    Box::new(Expr::Variable("b".to_string())),
+                )))),
+            },
+            ASTNode::Return(Box::new(Expr::Call(
+                "add".to_string(),
+                vec![Expr::Number(2), Expr::Number(3)],
+            ))),
+        ]);
 
         let instructions = generate_instructions(&ast);
 
         assert_eq!(
             instructions,
             vec![
-                Instruction::ENT(0),
+                Instruction::ENT(2),
+                Instruction::LEA(0),
+                Instruction::LI,
+                Instruction::LEA(1),
+                Instruction::LI,
+                Instruction::ADD,
+                Instruction::PSH,
+                Instruction::EXIT,
                 Instruction::IMM(2),
                 Instruction::IMM(3),
-                Instruction::JSR(1000), // placeholder
+                Instruction::JSR(0),
                 Instruction::PSH,
                 Instruction::EXIT,
             ]
         );
     }
 
-
-
 }
+
+
+
+
+
+
+
