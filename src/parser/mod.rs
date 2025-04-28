@@ -4,14 +4,23 @@ use crate::Expr;
 use std::iter::Peekable;
 use std::slice::Iter;
 
+///parses a sequence of tokens into an AST
 pub fn parse(tokens: &[Token]) -> ASTNode {
     let mut iter = tokens.iter().peekable();
 
-    // Parse: int main() {
-    match (iter.next(), iter.next(), iter.next(), iter.next(), iter.next()) {
-        (Some(Token::Int), Some(Token::Identifier(_)), Some(Token::LParen), Some(Token::RParen), Some(Token::LBrace)) => {}
+    //parsing here is done for: int main(...) {
+    match (iter.next(), iter.next(), iter.next()) {
+        (Some(Token::Int), Some(Token::Identifier(_)), Some(Token::LParen)) => {
+            //skip everything until '{'
+            while let Some(token) = iter.next() {
+                if *token == Token::LBrace {
+                    break;
+                }
+            }
+        }
         _ => panic!("Syntax error in function declaration"),
     }
+
 
     let mut statements = Vec::new();
 
@@ -34,45 +43,7 @@ pub fn parse(tokens: &[Token]) -> ASTNode {
     ASTNode::Sequence(statements)
 }
 
-
-
-fn parse_function_def(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
-    expect_token(iter, Token::Int);
-    let name = match iter.next() {
-        Some(Token::Identifier(s)) => s.clone(),
-        other => panic!("Expected function name, got {:?}", other),
-    };
-
-    expect_token(iter, Token::LParen);
-
-    let mut params = Vec::new();
-    while let Some(token) = iter.peek() {
-        match token {
-            Token::Int => {
-                iter.next(); // consume 'int'
-                match iter.next() {
-                    Some(Token::Identifier(name)) => {
-                        params.push(name.clone());
-                        if let Some(Token::Comma) = iter.peek() {
-                            iter.next(); // consume ','
-                        }
-                    }
-                    _ => panic!("Expected parameter name"),
-                }
-            }
-            Token::RParen => {
-                iter.next(); // consume ')'
-                break;
-            }
-            _ => panic!("Unexpected token in parameter list: {:?}", token),
-        }
-    }
-
-    let body = Box::new(parse_block(iter));
-    ASTNode::FunctionDef { name, params, body }
-}
-
-
+///parses a variable declaration from the token stream
 fn parse_declaration(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     let name = match iter.next() {
         Some(Token::Identifier(name)) => name.clone(),
@@ -86,6 +57,7 @@ fn parse_declaration(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     ASTNode::Declaration(name, expr)
 }
 
+///parses an assignment statement from the token stream
 fn parse_assignment(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     let name = match iter.next() {
         Some(Token::Identifier(name)) => name.clone(),
@@ -99,7 +71,7 @@ fn parse_assignment(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     ASTNode::Assignment(name, expr)
 }
 
-
+///parses an individual statement from the token stream
 fn parse_stmt(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     match iter.peek() {
         Some(Token::Return) => {
@@ -132,6 +104,7 @@ fn parse_stmt(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     }
 }
 
+///parses a while loop from the token stream
 fn parse_while(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     expect_token(iter, Token::LParen);
     let condition = parse_expr(iter);
@@ -145,7 +118,7 @@ fn parse_while(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     }
 }
 
-
+///parses a block of statements enclosed in braces
 fn parse_block(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     expect_token(iter, Token::LBrace);
     let mut stmts = Vec::new();
@@ -174,8 +147,7 @@ fn parse_block(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
 
 
 
-
-// Parses: if (<expr>) return ...; else return ...;
+///parses an if statement from the token stream
 fn parse_if(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     expect_token(iter, Token::LParen);
     let condition = parse_expr(iter);
@@ -199,8 +171,7 @@ fn parse_if(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
         else_branch,
     }
 }
-
-// Utility: ensures the next token matches expectation
+///parses a function call from the token stream
 fn expect_token(iter: &mut Peekable<Iter<Token>>, expected: Token) {
     match iter.next() {
         Some(t) if *t == expected => {}
@@ -208,11 +179,13 @@ fn expect_token(iter: &mut Peekable<Iter<Token>>, expected: Token) {
     }
 }
 
+
+///parses an expression from the token stream
 fn parse_expr(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     parse_cmp(iter)
 }
 
-
+///parses a comparison expression from the token stream
 fn parse_cmp(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     let mut left = parse_add_sub(iter);
 
@@ -240,7 +213,7 @@ fn parse_cmp(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     left
 }
 
-
+///parses an addition or subtraction expression from the token stream
 fn parse_add_sub(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     let mut left = parse_mul_div(iter);
 
@@ -263,6 +236,7 @@ fn parse_add_sub(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     left
 }
 
+///parses a multiplication or division expression from the token stream
 fn parse_mul_div(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     let mut left = parse_primary(iter);
 
@@ -290,6 +264,7 @@ fn parse_mul_div(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     left
 }
 
+///parses a primary expression from the token stream
 fn parse_primary(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     match iter.next() {
         Some(Token::Number(n)) => Box::new(Expr::Number(*n)),
