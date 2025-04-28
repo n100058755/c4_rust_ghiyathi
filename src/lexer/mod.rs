@@ -1,4 +1,4 @@
-
+///tokens that are recognized by the lexer
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Int,
@@ -26,6 +26,8 @@ pub enum Token {
     Unknown(char),
 }
 
+
+///converts source code string into a vector of tokens, using match here
 pub fn tokenize(source: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut chars = source.chars().peekable();
