@@ -1,4 +1,5 @@
-///VM opcodes translated from the original C4 compiler
+
+///this module will implement a simple stack-based virtual machine for executing instructions
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Instruction {
     IMM(i64),
@@ -34,6 +35,7 @@ pub enum Instruction {
     GT, // for >
 }
 
+///simple stack-based virtual machine struct
 pub struct VM {
     pub stack: Vec<i64>,
     pub pc: usize,
@@ -42,7 +44,9 @@ pub struct VM {
     pub running: bool,
 }
 
+///executes the instructions in the program
 impl VM {
+    ///creates a new VM instance with the given program
     pub fn new(program: Vec<Instruction>) -> Self {
         VM {
             stack: Vec::new(),
@@ -52,7 +56,7 @@ impl VM {
             running: true,
         }
     }
-
+    ///runs the VM, executing instructions until the program counter exceeds the program length
     pub fn run(&mut self) {
 
         while self.running {
@@ -169,7 +173,7 @@ impl VM {
                     }
                     self.running = false;
                 }
-                // Stub system calls
+
                 Instruction::PRTF => {
                     let _arg_count = self.stack.pop().unwrap();
                     let _fmt_addr  = self.stack.pop().unwrap();
@@ -177,7 +181,7 @@ impl VM {
                     self.stack.push(0);
                 }
                 Instruction::MALC => {
-                    self.stack.push(0x1000); // fake address
+                    self.stack.push(0x1000);
                 }
                 Instruction::FREE => {
                     let _ = self.stack.pop();
@@ -196,17 +200,17 @@ impl VM {
                 Instruction::OPEN => {
                     let _ = self.stack.pop();
                     let _ = self.stack.pop();
-                    self.stack.push(3); // fake fd
+                    self.stack.push(3);
                 }
                 Instruction::READ => {
                     let _ = self.stack.pop();
                     let _ = self.stack.pop();
                     let _ = self.stack.pop();
-                    self.stack.push(10); // fake read count
+                    self.stack.push(10);
                 }
                 Instruction::CLOS => {
                     let _ = self.stack.pop();
-                    self.stack.push(0); // fake success
+                    self.stack.push(0);
                 }
                 Instruction::EQ => {
                     let b = self.stack.pop().unwrap();
