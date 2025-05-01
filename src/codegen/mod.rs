@@ -1,3 +1,5 @@
+#![allow(dead_code)] //suppress warnings for unused codes
+
 use crate::vm::Instruction;
 use std::collections::HashMap;
 
@@ -15,6 +17,7 @@ pub enum ASTNode {
         params: Vec<String>,
         body: Box<ASTNode>,
     },
+    Print(String),
 }
 ///expression types for the AST
 #[derive(Debug, PartialEq)]
@@ -81,12 +84,18 @@ fn generate_instructions_inner(
 ) {
     match ast {
         ASTNode::Return(expr) => {
-            emit_expr(expr, instructions, symbol_table, patches);
-            instructions.push(Instruction::PSH);
-            instructions.push(Instruction::EXIT);
+             emit_expr(expr, instructions, symbol_table, patches);
+             //duplicate the return value so EXIT can see it
+             instructions.push(Instruction::PSH);
+             instructions.push(Instruction::EXIT);
+         }
+        ASTNode::Print(s) => {
+            //push the literal onto the instruction stream
+            instructions.push(Instruction::PrintfStr(s.clone()));
         }
 
         ASTNode::If { condition, then_branch, else_branch } => {
+            //emit the condition expression
             emit_expr(condition, instructions, symbol_table, patches);
             let jump_false_index = instructions.len();
             instructions.push(Instruction::BZ(9999));
@@ -108,7 +117,7 @@ fn generate_instructions_inner(
                 instructions[jump_false_index] = Instruction::BZ(after_then);
             }
         }
-
+        //emit the while loop
         ASTNode::While { condition, body } => {
             let loop_start = instructions.len();
 
@@ -124,13 +133,13 @@ fn generate_instructions_inner(
             let loop_end = instructions.len();
             instructions[jump_if_false_index] = Instruction::BZ(loop_end);
         }
-
+        //emit the sequence of statements
         ASTNode::Sequence(statements) => {
             for stmt in statements {
                 generate_instructions_inner(stmt, instructions, symbol_table, next_offset, patches);
             }
         }
-
+        //emit the variable declaration
         ASTNode::Declaration(name, expr) => {
             let offset = *next_offset;
             *next_offset += 1;
@@ -140,7 +149,7 @@ fn generate_instructions_inner(
             emit_expr(expr, instructions, symbol_table, patches);
             instructions.push(Instruction::SI);
         }
-
+        //emit the assignment
         ASTNode::Assignment(name, expr) => {
             if let Some(&offset) = symbol_table.get(name) {
                 instructions.push(Instruction::LEA(offset));      
@@ -150,7 +159,7 @@ fn generate_instructions_inner(
                 panic!("Assignment to undeclared variable: {}", name);
             }
         }
-
+        //emit the function definition
         ASTNode::FunctionDef { name: _, params, body } => {
             symbol_table.clear();
             *next_offset = params.len();
@@ -159,6 +168,8 @@ fn generate_instructions_inner(
             }
 
             generate_instructions_inner(body, instructions, symbol_table, next_offset, patches);
+
+
         }
 
 
@@ -167,7 +178,7 @@ fn generate_instructions_inner(
 }
 
 
-///emits instructions for a given expression
+//emits instructions for a given expression
 fn emit_expr(
     expr: &Expr,
     instructions: &mut Vec<Instruction>,
@@ -175,11 +186,12 @@ fn emit_expr(
     patches: &mut Vec<(usize, String)>,
 )
 {
+    //match the expression type and emit corresponding instructions
     match expr {
-        Expr::Number(n) => {
+        Expr::Number(n) => { //push the number onto the stack 
             instructions.push(Instruction::IMM(*n));
         }
-        Expr::Add(lhs, rhs) => {
+        Expr::Add(lhs, rhs) => { 
             emit_expr(lhs, instructions, symbol_table, patches);
             emit_expr(rhs, instructions, symbol_table, patches);
             instructions.push(Instruction::ADD);
@@ -219,25 +231,25 @@ fn emit_expr(
             emit_expr(rhs, instructions, symbol_table, patches);
             instructions.push(Instruction::GT);
         }
-        Expr::Variable(name) => {
+        Expr::Variable(name) => { //load the variable value
             if let Some(&offset) = symbol_table.get(name) {
                 instructions.push(Instruction::LEA(offset));
-                instructions.push(Instruction::LI); // load value from address
+                instructions.push(Instruction::LI); //load value from address
             } else {
                 panic!("Use of undeclared variable: {}", name);
             }
         }
-        Expr::Call(func_name, args) => {
+        Expr::Call(func_name, args) => { 
             for arg in args {
                 emit_expr(arg, instructions, symbol_table, patches);
             }
             let placeholder_index = instructions.len();
-            instructions.push(Instruction::JSR(9999)); // temporary wrong address
+            instructions.push(Instruction::JSR(9999)); //temporary wrong address
             patches.push((placeholder_index, func_name.clone())); // save for later patching
         }
 
-
-        Expr::Var(name) => {
+        //load the variable value
+        Expr::Var(name) => { 
             if let Some(&offset) = symbol_table.get(name) {
                 instructions.push(Instruction::LEA(offset));
                 instructions.push(Instruction::LI);
