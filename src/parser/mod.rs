@@ -6,66 +6,79 @@ use std::slice::Iter;
 
 ///parses a sequence of tokens into an AST
 pub fn parse(tokens: &[Token]) -> ASTNode {
+    //print first 8 tokens before parsing begins for debugging
+    //eprintln!("parse() starting with tokens: {:?}", &tokens[..tokens.len().min(8)]);
     let mut iter = tokens.iter().peekable();
 
     //parsing here is done for: int main(...) {
-    match (iter.next(), iter.next(), iter.next()) {
-        (Some(Token::Int), Some(Token::Identifier(_)), Some(Token::LParen)) => {
-            //skip everything until '{'
-            while let Some(token) = iter.next() {
-                if *token == Token::LBrace {
-                    break;
-                }
-            }
+    //skip any leading tokens until we hit the real int
+    while let Some(tok) = iter.peek() { 
+        if **tok == Token::Int { 
+            break; //found the start of the function
         }
-        _ => panic!("Syntax error in function declaration"),
+        iter.next(); //consume the token
+    }
+    //now parse the function header: int main(
+    if iter.next() != Some(&Token::Int) //consume 'int'
+         || !matches!(iter.next(), Some(Token::Identifier(_))) //consume 'main'
+         || iter.next() != Some(&Token::LParen) //consume '('
+     {
+         panic!("Syntax error in function declaration"); 
+     }
+
+    //skip until '{'
+    while let Some(tok) = iter.next() {
+        if *tok == Token::LBrace {
+            break; //found the start of the function body
+        }
     }
 
 
-    let mut statements = Vec::new();
+    let mut statements = Vec::new(); //vector to hold the statements
 
-    while let Some(token) = iter.peek() {
-        match token {
+    while let Some(token) = iter.peek() { //peek at the next token
+        match token { //match on the token
+            //consume the token and parse the statement
             Token::Return | Token::If | Token::While | Token::LBrace | Token::Int | Token::Identifier(_) => {
                 statements.push(parse_stmt(&mut iter));
             }
-            Token::RBrace => {
+            Token::RBrace => { //found the end of the function body
                 iter.next(); // consume '}'
                 break;
             }
-            _ => {
+            _ => { //unexpected token
                 println!("DEBUG next token in block: {:?}", token);
                 panic!("Unexpected token inside block: {:?}", token);
             }
         }
     }
 
-    ASTNode::Sequence(statements)
+    ASTNode::Sequence(statements) //return the sequence of statements
 }
 
 ///parses a variable declaration from the token stream
 fn parse_declaration(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
-    let name = match iter.next() {
+    let name = match iter.next() { //consume 'int'
         Some(Token::Identifier(name)) => name.clone(),
         _ => panic!("Expected variable name"),
     };
 
-    expect_token(iter, Token::Assign);
-    let expr = parse_expr(iter);
-    expect_token(iter, Token::Semicolon);
+    expect_token(iter, Token::Assign); //consume '='
+    let expr = parse_expr(iter); //parse the expression
+    expect_token(iter, Token::Semicolon); //consume ';'
 
-    ASTNode::Declaration(name, expr)
+    ASTNode::Declaration(name, expr) //return the declaration
 }
 
 ///parses an assignment statement from the token stream
 fn parse_assignment(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
-    let name = match iter.next() {
+    let name = match iter.next() { //consume 'int'
         Some(Token::Identifier(name)) => name.clone(),
         _ => panic!("Expected variable name"),
     };
 
     expect_token(iter, Token::Assign);
-    let expr = parse_expr(iter);
+    let expr = parse_expr(iter); //parse the expression
     expect_token(iter, Token::Semicolon);
 
     ASTNode::Assignment(name, expr)
@@ -73,26 +86,44 @@ fn parse_assignment(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
 
 ///parses an individual statement from the token stream
 fn parse_stmt(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
+    //handle printf("...")
+    if let Some(Token::Identifier(name)) = iter.peek() {
+        if name == "printf" {
+            // consume 'printf'
+            iter.next();
+            // consume '('
+            expect_token(iter, Token::LParen);
+            // next token must be a string literal
+            let s = if let Some(Token::StringLiteral(s)) = iter.next() {
+                s.clone()
+            } else { //consume the token
+                panic!("Expected string literal in printf");
+            };
+            expect_token(iter, Token::RParen);
+            expect_token(iter, Token::Semicolon);
+            return ASTNode::Print(s);
+        }
+    }
     match iter.peek() {
         Some(Token::Return) => {
-            iter.next(); // consume 'return'
+            iter.next(); //consume 'return'
             let expr = parse_expr(iter);
             expect_token(iter, Token::Semicolon);
             ASTNode::Return(expr)
         }
         Some(Token::If) => {
-            iter.next(); // consume 'if'
+            iter.next(); //consume 'if'
             parse_if(iter)
         }
         Some(Token::LBrace) => {
             parse_block(iter)
         }
         Some(Token::While) => {
-            iter.next(); // consume 'while'
+            iter.next(); //consume 'while'
             parse_while(iter)
         }
         Some(Token::Int) => {
-            iter.next(); // consume 'int'
+            iter.next(); //consume 'int'
             parse_declaration(iter)
         }
         Some(Token::Identifier(_)) => {
@@ -110,7 +141,7 @@ fn parse_while(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
     let condition = parse_expr(iter);
     expect_token(iter, Token::RParen);
 
-    let body = parse_stmt(iter); // handles both single and `{}` blocks
+    let body = parse_stmt(iter); //handles both single and '{}' blocks
 
     ASTNode::While {
         condition,
@@ -129,9 +160,10 @@ fn parse_block(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
                 iter.next();
                 break;
             }
-            Token::Return | Token::If | Token::While | Token::LBrace => {
-                stmts.push(parse_stmt(iter));
-            }
+            //also allow variable declarations ('int ...') inside blocks
+            Token::Return | Token::If | Token::While | Token::LBrace | Token::Int => {
+                 stmts.push(parse_stmt(iter));
+             }
             t => {
                 println!("DEBUG next token in block: {:?}", t);
                 panic!("Unexpected token inside block: {:?}", t);
@@ -157,7 +189,7 @@ fn parse_if(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
 
 
     let else_branch = if let Some(Token::Else) = iter.peek() {
-        iter.next(); // consume 'else'
+        iter.next(); //consume 'else'
         Some(Box::new(parse_stmt(iter)))
     } else {
         None
@@ -220,7 +252,7 @@ fn parse_add_sub(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     while let Some(token) = iter.peek() {
         match token {
             Token::Plus => {
-                iter.next(); // consume '+'
+                iter.next(); //consume '+'
                 let right = parse_mul_div(iter);
                 left = Box::new(Expr::Add(left, right));
             }
@@ -273,7 +305,7 @@ fn parse_primary(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
             let name = name.clone();
 
             if let Some(Token::LParen) = iter.peek() {
-                iter.next(); // consume '('
+                iter.next(); //consume '('
                 let mut args = Vec::new();
 
                 while let Some(token) = iter.peek() {
@@ -285,7 +317,7 @@ fn parse_primary(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
                     args.push(*arg);
 
                     if let Some(Token::Comma) = iter.peek() {
-                        iter.next(); // consume ','
+                        iter.next(); //consume ','
                     } else {
                         break;
                     }
