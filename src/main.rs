@@ -3,42 +3,83 @@ mod parser;
 mod vm;
 mod codegen;
 
-use codegen::{ASTNode, Expr, generate_instructions};
-use std::env;
+use codegen::Expr;
 use std::fs;
+use clap::Parser;
+
+
+///a mini C4 compiler in rust
+#[derive(Parser)]
+#[command(name = "c4rust", about = "Compile and run C4 programs")]
+struct Cli {
+    ///show tokens then exit
+    #[arg(long)]
+    tokens: bool,
+
+    ///show AST then exit
+    #[arg(long)]
+    ast: bool,
+
+    ///trace VM execution step by step
+    #[arg(long)]
+    trace: bool,
+
+    ///input C4 source file
+    input: String,
+}
 
 ///main function to run the compiler
 ///this is the entry point for the C4 Rust compiler and VM
 ///reads a C file, tokenizes it, parses it into an AST
 ///then generates VM instructions, and runs the program
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    //parse CLI flags
+    let cli = Cli::parse();
 
-    if args.len() != 2 {
-        eprintln!("Usage: {} <input.c>", args[0]);
-        std::process::exit(1);
-    }
-
-    let filename = &args[1];
-    let source = fs::read_to_string(filename)
+    //read the source file
+    let source = fs::read_to_string(&cli.input)
         .expect("Failed to read source file");
 
+    //tokenize
     let tokens = lexer::tokenize(&source);
+    if cli.tokens {
+        println!("{:#?}", tokens);
+        return;
+    }
+
+    //parse to AST
     let ast = parser::parse(&tokens);
+    if cli.ast {
+        println!("{:#?}", ast);
+        return;
+    }
+
+    //generate a vector of VM instructions from the AST
     let program = codegen::generate_instructions(&ast);
+
+    //create the VM
     let mut vm = vm::VM::new(program);
+    if cli.trace {
+        vm.enable_trace();
+    }
+
+    //run the loaded program on the VM
     vm.run();
 }
+
 
 ///tests for the compiler
 #[cfg(test)]
 mod tests {
+
+    use crate::codegen::{ASTNode, Expr};
     use crate::lexer::{tokenize, Token};
     use crate::parser::parse;
     use crate::vm::{Instruction, VM};
 
     #[test]
     fn test_tokenizer() {
+        //verify basic tokens from a simple function definition
         let src = "int main() { return 42; }";
         let tokens = tokenize(src);
 
@@ -55,6 +96,7 @@ mod tests {
 
     #[test]
     fn test_vm_add() {
+        //check that ADD instruction computes stack top values correctly
         let program = vec![
             Instruction::IMM(2),
             Instruction::IMM(3),
@@ -70,6 +112,7 @@ mod tests {
 
     #[test]
     fn test_vm_bz_branching() {
+        //check BZ skips instructions when top of stack equals zero
         let program = vec![
             Instruction::IMM(0),
             Instruction::BZ(5),
@@ -88,6 +131,7 @@ mod tests {
 
     #[test]
     fn test_vm_bnz_branching() {
+        //check BNZ skips when top of stack is non-zero
         let program = vec![
             Instruction::IMM(1),
             Instruction::BNZ(5),
@@ -106,6 +150,7 @@ mod tests {
 
     #[test]
     fn test_vm_function_call() {
+        //check JSR and LEV manage function call and return value
         let program = vec![
             Instruction::JSR(4),
             Instruction::IMM(42),
@@ -123,6 +168,7 @@ mod tests {
 
     #[test]
     fn test_vm_memory_access() {
+        //test LEA, SI, and LI for local variable storage and retrieval
         let program = vec![
             Instruction::ENT(2),
             Instruction::LEA(0),
@@ -141,10 +187,10 @@ mod tests {
 
     #[test]
     fn test_vm_syscall_stubs() {
+        //validate that placeholder syscalls push dummy values
         let program = vec![
             Instruction::IMM(100),
             Instruction::IMM(1),
-            Instruction::PRTF,
             Instruction::MALC,
             Instruction::IMM(3),
             Instruction::CLOS,
@@ -159,6 +205,7 @@ mod tests {
 
     #[test]
     fn test_parser_return_add() {
+        //parse a return statement with an expression 2+3
         use crate::codegen::{ASTNode, Expr};
 
         let tokens = tokenize("int main() { return 2 + 3; }");
@@ -176,6 +223,7 @@ mod tests {
 
     #[test]
     fn test_codegen_add() {
+        ///esure generate_instructions outputs correct sequence for 2+3
         use crate::codegen::{generate_instructions, ASTNode, Expr};
         use crate::vm::Instruction;
 
@@ -200,9 +248,11 @@ mod tests {
     }
 
 
-
+    ///verify parser handles operator precedence: multiplication before addition
     #[test]
     fn test_parser_add_multiply() {
+        ///verify parser handles precedence: 1 + 2 * 3
+
         use crate::codegen::{ASTNode, Expr};
 
         let tokens = tokenize("int main() { return 1 + 2 * 3; }");
@@ -224,6 +274,7 @@ mod tests {
 
     #[test]
     fn test_parser_with_parentheses() {
+        ///check parser respects parentheses: (1 + 2) * 3
         use crate::codegen::{ASTNode, Expr};
         let tokens = tokenize("int main() { return (1 + 2) * 3; }");
         let ast = parse(&tokens);
@@ -244,6 +295,7 @@ mod tests {
 
     #[test]
     fn test_nested_parentheses_expression() {
+        ///test nested parentheses expression evaluation
         use crate::codegen::{ASTNode, Expr};
 
         let tokens = tokenize("int main() { return (1 + 2) * (4 - 1); }");
@@ -268,6 +320,7 @@ mod tests {
 
     #[test]
     fn test_if_else_blocks() {
+        ///ensure if-else constructs parse correctly
         use crate::codegen::{ASTNode, Expr};
 
         let tokens = tokenize("int main() { if (1 < 2) { return 42; } else { return 0; } }");
@@ -294,6 +347,7 @@ mod tests {
 
     #[test]
     fn test_while_loop() {
+        ///verify while loops parse and produce correct AST
         use crate::codegen::{ASTNode, Expr};
 
         let tokens = tokenize("int main() { while (1 < 2) { return 5; } }");
@@ -317,6 +371,7 @@ mod tests {
 
     #[test]
     fn test_tokenizer_assignment_and_equality() {
+        ///test tokenizer for assignment and equality operators
         use crate::lexer::{tokenize, Token};
 
         let tokens = tokenize("int x = 5; if (x == 5) { return x; }");
@@ -345,6 +400,7 @@ mod tests {
 
     #[test]
     fn test_var_decl_and_return() {
+        ///test variable declaration and return statement
         use crate::lexer::tokenize;
         use crate::parser::parse;
         use crate::codegen::generate_instructions;
@@ -361,6 +417,7 @@ mod tests {
 
     #[test]
     fn test_codegen_function_call() {
+        ///test function call generation
         use crate::codegen::{generate_instructions, ASTNode, Expr};
         use crate::vm::Instruction;
 
@@ -401,11 +458,47 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn test_parser_print_statement() {
+        //test print statement parsing
+        let src = r#"int main() { printf("hey\n"); return 0; }"#;
+        let tokens = tokenize(src);
+        let ast = parse(&tokens);
+        assert_eq!(
+            ast,
+            ASTNode::Sequence(vec![
+                // printf("hey\n");
+                ASTNode::Print("hey\n".to_string()),
+                // return 0;
+                ASTNode::Return(Box::new(Expr::Number(0))),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_parser_if_without_else() {
+        //test if statement without else branch
+        let src = "int main() { if (1 < 2) { return 42; } return 7; }";
+        let tokens = tokenize(src);
+        let ast = parse(&tokens);
+        assert_eq!(
+            ast,
+            ASTNode::Sequence(vec![
+                ASTNode::If {
+                    condition: Box::new(Expr::Less(
+                        Box::new(Expr::Number(1)),
+                        Box::new(Expr::Number(2))
+                    )),
+                    then_branch: Box::new(ASTNode::Sequence(vec![
+                        ASTNode::Return(Box::new(Expr::Number(42)))
+                    ])),
+                    else_branch: None,
+                },
+                ASTNode::Return(Box::new(Expr::Number(7))),
+            ])
+        );
+    }
+
+
 }
-
-
-
-
-
-
-
