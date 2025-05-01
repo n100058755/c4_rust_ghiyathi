@@ -41,7 +41,7 @@ Built for clarity, unit-test coverage, and easy extension.
 
 ### Build & Test
 
-'''bash
+```bash
 git clone https://github.com/n100058755/c4_rust_ghiyathi.git
 cd c4_rust_ghiyathi
 
