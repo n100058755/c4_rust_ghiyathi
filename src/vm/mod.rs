@@ -1,6 +1,7 @@
+#![allow(dead_code)] //suppress warnings for unused opcodes
 
 ///this module will implement a simple stack-based virtual machine for executing instructions
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     IMM(i64),
     PSH,
@@ -22,7 +23,6 @@ pub enum Instruction {
     SI,
     SC,
     EXIT,
-    PRTF,
     MALC,
     FREE,
     MSET,
@@ -33,6 +33,7 @@ pub enum Instruction {
     EQ, // for ==
     LT, // for <
     GT, // for >
+    PrintfStr(String), // for printf string
 }
 
 ///simple stack-based virtual machine struct
@@ -42,11 +43,12 @@ pub struct VM {
     pub bp: usize,
     pub program: Vec<Instruction>,
     pub running: bool,
+    pub trace: bool,  
 }
 
-///executes the instructions in the program
+///execute the instructions in the program
 impl VM {
-    ///creates a new VM instance with the given program
+    //create a new VM instance with the given program
     pub fn new(program: Vec<Instruction>) -> Self {
         VM {
             stack: Vec::new(),
@@ -54,19 +56,27 @@ impl VM {
             bp: 0,
             program,
             running: true,
+            trace: false,
         }
     }
-    ///runs the VM, executing instructions until the program counter exceeds the program length
-    pub fn run(&mut self) {
 
+    pub fn enable_trace(&mut self) {
+        self.trace = true;
+    }
+
+    //run the VM, executing instructions until the program counter exceeds the program length
+    pub fn run(&mut self) {
         while self.running {
+            if self.trace {
+                eprintln!("TRACE pc={} instr={:?} stack={:?}", self.pc, self.program[self.pc], self.stack);
+            }
             if self.pc >= self.program.len() {
                 panic!("Program counter out of bounds");
             }
 
-            match self.program[self.pc] {
+            match &self.program[self.pc] {
                 Instruction::IMM(val) => {
-                    self.stack.push(val);
+                    self.stack.push(*val);
                 }
                 Instruction::PSH => {
                     if let Some(&top) = self.stack.last() {
@@ -101,26 +111,26 @@ impl VM {
                     self.stack.push(a % b);
                 }
                 Instruction::JMP(target) => {
-                    self.pc = target;
+                    self.pc = *target;
                     continue;
                 }
                 Instruction::BZ(target) => {
                     let cond = self.stack.pop().unwrap();
                     if cond == 0 {
-                        self.pc = target;
+                        self.pc = *target;
                         continue;
                     }
                 }
                 Instruction::BNZ(target) => {
                     let cond = self.stack.pop().unwrap();
                     if cond != 0 {
-                        self.pc = target;
+                        self.pc = *target;
                         continue;
                     }
                 }
                 Instruction::JSR(target) => {
                     self.stack.push((self.pc + 1) as i64);
-                    self.pc = target;
+                    self.pc = *target;
                     continue;
                 }
                 Instruction::ENT(size) => {
@@ -129,7 +139,7 @@ impl VM {
                     self.stack.resize(self.stack.len() + size, 0);
                 }
                 Instruction::ADJ(n) => {
-                    for _ in 0..n {
+                    for _ in 0..*n {
                         self.stack.pop();
                     }
                 }
@@ -165,23 +175,40 @@ impl VM {
                     self.stack[addr] = val;
                 }
                 Instruction::EXIT => {
-                    println!("Final stack: {:?}", self.stack);
-                    if let Some(&result) = self.stack.last() {
-                        println!("Program exited with value: {}", result);
-                    } else {
-                        println!("Program exited: stack is empty");
+                    //drop the initial dummy value from ENT(0)
+                    //drop dummy only if we actually reserved locals (ENT)
+                    //drop the initial dummy only when the program really began with ENT(...)
+                    if let Some(first) = self.program.get(0) {
+                        if let Instruction::ENT(_) = *first {
+                            if !self.stack.is_empty() {
+                                self.stack.remove(0);
+                                self.stack.remove(0);
+                            }
+                        }
                     }
-                    self.running = false;
-                }
 
-                Instruction::PRTF => {
-                    let _arg_count = self.stack.pop().unwrap();
-                    let _fmt_addr  = self.stack.pop().unwrap();
-                    println!("[PRTF] Simulated printf");
-                    self.stack.push(0);
+                     //println!("Final stack: {:?}", self.stack);
+                     if let Some(&result) = self.stack.last() {
+                         println!("Program exited with value: {}", result);
+                     } else {
+                         println!("Program exited: stack is empty");
+                     }
+                     self.running = false;
+                 }
+
+
+
+                Instruction::PrintfStr(s) => {
+                    print!("{}", s);
                 }
                 Instruction::MALC => {
+                    //MALC takes two inputs (size, flags) pop them both
+                    let _flags = self.stack.pop().expect("MALC missing flags");
+                    let _size  = self.stack.pop().expect("MALC missing size");
+                    //push an error/status code of 0, then the pointer
+                    self.stack.push(0);
                     self.stack.push(0x1000);
+
                 }
                 Instruction::FREE => {
                     let _ = self.stack.pop();
