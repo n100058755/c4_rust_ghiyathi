@@ -1,4 +1,7 @@
 # C4Rust
+# [COSC 320] Principles of Programming Languages
+# Work submitted by: Nayef Alnaqbi (100058755) and Sultan Alqassab (100059110)
+# Submitted to: Dr. Davor
 
 A minimal self-hosted C4 compiler and VM written in Rust.
 
