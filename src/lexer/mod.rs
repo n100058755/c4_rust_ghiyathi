@@ -1,9 +1,11 @@
+#![allow(dead_code)] //suppress warnings for unused opcodes
+
 ///tokens that are recognized by the lexer
 #[derive(Debug, PartialEq, Clone)]
-pub enum Token {
+pub enum Token { ///token types
     Int,
     Return,
-    Identifier(String),
+    Identifier(String), 
     Number(i64),
     LParen,
     RParen,
@@ -23,6 +25,7 @@ pub enum Token {
     While,
     Assign,
     Comma,
+    StringLiteral(String),
     Unknown(char),
 }
 
@@ -32,34 +35,35 @@ pub fn tokenize(source: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut chars = source.chars().peekable();
 
-    while let Some(&ch) = chars.peek() {
-        match ch {
-            ' ' | '\n' | '\r' | '\t' => {
+    while let Some(&ch) = chars.peek() { //peek() returns an Option<&char>
+        //match on the character
+        match ch { 
+            ' ' | '\n' | '\r' | '\t' => { //skip whitespace
                 chars.next();
-            }
-            '(' => {
+            } 
+            '(' => { //lparen   
                 chars.next();
                 tokens.push(Token::LParen);
             }
-            ')' => {
+            ')' => { //rparen
                 chars.next();
                 tokens.push(Token::RParen);
             }
-            '{' => {
+            '{' => { //lbrace
                 chars.next();
                 tokens.push(Token::LBrace);
             }
-            '}' => {
+            '}' => {  //rbrace
                 chars.next();
                 tokens.push(Token::RBrace);
             }
-            ';' => {
+            ';' => { //semicolon
                 chars.next();
                 tokens.push(Token::Semicolon);
             }
-            '0'..='9' => {
+            '0'..='9' => { //number literal
                 let mut num = 0;
-                while let Some(c) = chars.peek() {
+                while let Some(c) = chars.peek() { 
                     if c.is_digit(10) {
                         num = num * 10 + c.to_digit(10).unwrap() as i64;
                         chars.next();
@@ -69,31 +73,31 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 }
                 tokens.push(Token::Number(num));
             }
-            '+' => {
+            '+' => { //addition
                 chars.next();
                 tokens.push(Token::Plus);
             }
-            '*' => {
+            '*' => { //multiplication
                 chars.next();
                 tokens.push(Token::Star);
             }
 
-            '-' => {
+            '-' => { //subtraction
                 chars.next();
                 tokens.push(Token::Minus);
             }
 
-            '/' => {
+            '/' => { //division
                 chars.next();
                 tokens.push(Token::Divide);
             }
 
-            '%' => {
+            '%' => { //modulus
                 chars.next();
                 tokens.push(Token::Mod);
             }
 
-            '=' => {
+            '=' => { //assignment
                 chars.next();
                 if let Some('=') = chars.peek() {
                     chars.next();
@@ -103,33 +107,72 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 }
             }
 
-            '<' => {
+            '<' => { //less than
                 chars.next();
                 tokens.push(Token::Less);
             }
-            '>' => {
+            '>' => { //greater than
                 chars.next();
                 tokens.push(Token::Greater);
             }
 
-            ',' => {
+            ',' => { //comma
                 chars.next();
                 tokens.push(Token::Comma);
             }
 
-
-
-            'a'..='z' | 'A'..='Z' | '_' => {
-                let mut ident = String::new();
-                while let Some(c) = chars.peek() {
-                    if c.is_alphanumeric() || *c == '_' {
-                        ident.push(*c);
-                        chars.next();
-                    } else {
+            //string literal
+            '"' => {
+                chars.next(); //consume opening quote
+                let mut s = String::new();
+                while let Some(&c) = chars.peek() {
+                    chars.next();
+                    if c == '"' {
+                        //end of literal
                         break;
                     }
+                    if c == '\\' {
+                        //start of an escape sequence
+                        if let Some(&esc) = chars.peek() {
+                            chars.next(); //consume the escaped character
+                            match esc {
+                                'n'  => s.push('\n'),
+                                't'  => s.push('\t'),
+                                'r'  => s.push('\r'),
+                                '\\' => s.push('\\'),
+                                '"'  => s.push('"'),
+                                other => {
+                                    //unknown escape
+                                    s.push('\\');
+                                    s.push(other);
+                                }
+                            }
+                            continue;
+                        } else {
+                            //trailing backslash with no char
+                            s.push('\\');
+                            break;
+                        }
+                    }
+                    //normal character
+                    s.push(c);
                 }
-                match ident.as_str() {
+                tokens.push(Token::StringLiteral(s)); //push the string literal token
+            }
+
+
+
+            'a'..='z' | 'A'..='Z' | '_' => { //identifier
+                let mut ident = String::new();
+                while let Some(c) = chars.peek() { 
+                    if c.is_alphanumeric() || *c == '_' { //alphanumeric or underscore
+                        ident.push(*c);
+                        chars.next();
+                    } else { //not an identifier character
+                        break;
+                    }
+                } 
+                match ident.as_str() { //match on the identifier
                     "int" => tokens.push(Token::Int),
                     "return" => tokens.push(Token::Return),
                     "if" => tokens.push(Token::If),
@@ -140,11 +183,11 @@ pub fn tokenize(source: &str) -> Vec<Token> {
 
             }
             _ => {
-                tokens.push(Token::Unknown(ch));
+                tokens.push(Token::Unknown(ch)); //unknown character
                 chars.next();
             }
         }
     }
 
-    tokens
+    tokens //return the vector of tokens
 }
