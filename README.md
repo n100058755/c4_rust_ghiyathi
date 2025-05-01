@@ -27,7 +27,7 @@ Built for clarity, unit-test coverage, and easy extension.
 - **Parser**: recursive-descent, expressions ('+', '-', '*', '/', '%', '==', '<', '>'), statements, 'printf'  
 - **Codegen**: AST to 'Instruction' stream, including 'ENT'/'LEV' for stack frames  
 - **VM**: stack-machine supporting arithmetic, control flow ('JMP', 'BZ', 'BNZ'), function calls, memory ops, stubbed syscalls  
-- **CLI** via ['clap'](https://crates.io/crates/clap):  
+- **[BONUS 15%] CLI** via ['clap'](https://crates.io/crates/clap):  
   - '--tokens' to dump tokens  
   - '--ast' to dump AST  
   - '--trace' to step through VM execution  
@@ -50,3 +50,6 @@ cd c4_rust_ghiyathi
 
 # run all unit tests
 cargo test
+
+# run the project given a C code
+cargo run -- <input.c>
