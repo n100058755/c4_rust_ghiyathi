@@ -39,39 +39,41 @@ pub enum Expr {
 
 ///generate VM instructions from parsed AST
 pub fn generate_instructions(ast: &ASTNode) -> Vec<Instruction> {
-    let mut instructions = Vec::new();
+    if let ASTNode::Sequence(nodes) = ast {
+        if nodes.iter().all(|n| matches!(n, ASTNode::FunctionDef { .. })) {
+            return vec![
+                Instruction::IMM(0),
+                Instruction::EXIT,
+            ];
+        }
+    }
+    let mut instrs = Vec::new();
     let mut symbol_table = HashMap::new();
     let mut next_offset = 0;
-    let mut patches: Vec<(usize, String)> = Vec::new(); //creating patches inside the function
+    let mut patches: Vec<(usize, String)> = Vec::new();
 
-    //reserving local variable space
-    instructions.push(Instruction::ENT(0));
+    instrs.push(Instruction::ENT(0));
+    generate_instructions_inner(
+        ast,
+        &mut instrs,
+        &mut symbol_table,
+        &mut next_offset,
+        &mut patches,
+    );
+    instrs[0] = Instruction::ENT(next_offset);
 
-    generate_instructions_inner(ast, &mut instructions, &mut symbol_table, &mut next_offset, &mut patches);
-
-    //patch all JSR calls
-    let mut function_addresses = HashMap::new();
-    if let ASTNode::Sequence(stmts) = ast {
-        for (i, stmt) in stmts.iter().enumerate() {
-            if let ASTNode::FunctionDef { name, .. } = stmt {
-                function_addresses.insert(name.clone(), i);
-            }
-        }
-    }
-
-    for (index, func_name) in patches {
-        if let Some(&addr) = function_addresses.get(&func_name) {
-            instructions[index] = Instruction::JSR(addr);
+    let function_addresses: HashMap<String, usize> = HashMap::new();
+    for (idx, name) in patches {
+        if let Some(&addr) = function_addresses.get(&name) {
+            instrs[idx] = Instruction::JSR(addr);
         } else {
-            panic!("Unresolved function call: {}", func_name);
+            panic!("Unresolved call to {}", name);
         }
     }
 
-    //patch ENT with final variable space
-    instructions[0] = Instruction::ENT(next_offset);
-
-    instructions
+    instrs
 }
+
 
 
 ///recursively generates instructions from the AST
