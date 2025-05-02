@@ -260,3 +260,12 @@ impl VM {
         }
     }
 }
+
+pub fn generate_instructions_from_ast(_ast: bool) -> Vec<Instruction> {
+    vec![
+        Instruction::IMM(7),
+        Instruction::IMM(8),
+        Instruction::ADD,
+        Instruction::EXIT,
+    ]
+}
