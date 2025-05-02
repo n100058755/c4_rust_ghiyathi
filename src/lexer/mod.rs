@@ -1,3 +1,5 @@
+#![allow(dead_code)] //suppress warnings for unused opcodes
+
 ///tokens that are recognized by the lexer
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token { ///token types
@@ -110,6 +112,11 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 tokens.push(Token::Greater);
             }
 
+            ',' => { //comma
+                chars.next();
+                tokens.push(Token::Comma);
+            }
+
             //string literal
             '"' => {
                 chars.next(); //consume opening quote
@@ -153,7 +160,7 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 // consume the '/'
                 chars.next();
 
-                // line comment “//”
+                // line comment "//”
                 if chars.peek() == Some(&'/') {
                     chars.next(); // skip second slash
                     while let Some(&c2) = chars.peek() {
@@ -161,7 +168,7 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                         chars.next();
                     }
                 }
-                // block comment “/* … */”
+                // block comment "/* ... */”
                 else if chars.peek() == Some(&'*') {
                     chars.next(); // skip the '*'
                     while let Some(&c2) = chars.peek() {
@@ -179,7 +186,7 @@ pub fn tokenize(source: &str) -> Vec<Token> {
             }
 
 
-                        // skip preprocessor directives (“#include”, “#define”, etc.)
+                        // skip preprocessor directives ("#include”, "#define”, etc.)
             '#' => {
                 // consume the '#'
                 chars.next();
