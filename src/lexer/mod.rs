@@ -25,6 +25,7 @@ pub enum Token { ///token types
     While,
     Assign,
     Comma,
+    Div,
     StringLiteral(String),
     Unknown(char),
 }
@@ -85,11 +86,6 @@ pub fn tokenize(source: &str) -> Vec<Token> {
             '-' => { //subtraction
                 chars.next();
                 tokens.push(Token::Minus);
-            }
-
-            '/' => { //division
-                chars.next();
-                tokens.push(Token::Divide);
             }
 
             '%' => { //modulus
@@ -160,7 +156,48 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 tokens.push(Token::StringLiteral(s)); //push the string literal token
             }
 
+            '/' => {
+                // consume the '/'
+                chars.next();
 
+                // line comment "//”
+                if chars.peek() == Some(&'/') {
+                    chars.next(); // skip second slash
+                    while let Some(&c2) = chars.peek() {
+                        if c2 == '\n' { break; }
+                        chars.next();
+                    }
+                }
+                // block comment "/* ... */”
+                else if chars.peek() == Some(&'*') {
+                    chars.next(); // skip the '*'
+                    while let Some(&c2) = chars.peek() {
+                        chars.next();
+                        if c2 == '*' && chars.peek() == Some(&'/') {
+                            chars.next(); // skip the '/'
+                            break;
+                        }
+                    }
+                }
+                // a division operator
+                else {
+                    tokens.push(Token::Div);
+                }
+            }
+
+
+                        // skip preprocessor directives ("#include”, "#define”, etc.)
+            '#' => {
+                // consume the '#'
+                chars.next();
+                // skip until end of line (or EOF)
+                while let Some(&c2) = chars.peek() {
+                    chars.next();
+                    if c2 == '\n' {
+                        break;
+                    }
+                }
+            }
 
             'a'..='z' | 'A'..='Z' | '_' => { //identifier
                 let mut ident = String::new();
