@@ -6,55 +6,41 @@ use std::slice::Iter;
 
 ///parses a sequence of tokens into an AST
 pub fn parse(tokens: &[Token]) -> ASTNode {
-    //print first 8 tokens before parsing begins for debugging
-    //eprintln!("parse() starting with tokens: {:?}", &tokens[..tokens.len().min(8)]);
     let mut iter = tokens.iter().peekable();
+    //eprintln!("DEBUG_TOKENS = {:#?}", tokens);
 
-    //parsing here is done for: int main(...) {
-    //skip any leading tokens until we hit the real int
-    while let Some(tok) = iter.peek() { 
-        if **tok == Token::Int { 
-            break; //found the start of the function
-        }
-        iter.next(); //consume the token
-    }
-    //now parse the function header: int main(
-    if iter.next() != Some(&Token::Int) //consume 'int'
-         || !matches!(iter.next(), Some(Token::Identifier(_))) //consume 'main'
-         || iter.next() != Some(&Token::LParen) //consume '('
-     {
-         panic!("Syntax error in function declaration"); 
-     }
-
-    //skip until '{'
-    while let Some(tok) = iter.next() {
-        if *tok == Token::LBrace {
-            break; //found the start of the function body
-        }
-    }
-
-
-    let mut statements = Vec::new(); //vector to hold the statements
-
-    while let Some(token) = iter.peek() { //peek at the next token
-        match token { //match on the token
-            //consume the token and parse the statement
-            Token::Return | Token::If | Token::While | Token::LBrace | Token::Int | Token::Identifier(_) => {
-                statements.push(parse_stmt(&mut iter));
-            }
-            Token::RBrace => { //found the end of the function body
-                iter.next(); // consume '}'
+    //skip everything until we see exactly 'int main() {'
+    loop {
+        match iter.next() {
+            Some(Token::Identifier(name)) if name == "main" => {
+                //consume tokens until the "{"
+                while let Some(tok) = iter.next() {
+                    if *tok == Token::LBrace {
+                        break;
+                    }
+                }
                 break;
             }
-            _ => { //unexpected token
-                println!("DEBUG next token in block: {:?}", token);
-                panic!("Unexpected token inside block: {:?}", token);
+            Some(_) => {
+                // not yet "main", keep skipping
             }
+            None => panic!("couldn’t find 'main' in tokens"),
+        }
+    }
+    let mut statements = Vec::new();
+    while let Some(tok) = iter.peek() {
+        match tok {
+            Token::Return | Token::If | Token::While
+          | Token::LBrace  | Token::Int | Token::Identifier(_) =>
+                statements.push(parse_stmt(&mut iter)),
+            Token::RBrace => { iter.next(); break; }
+            other => panic!("Unexpected token in main body: {:?}", other),
         }
     }
 
-    ASTNode::Sequence(statements) //return the sequence of statements
+    ASTNode::Sequence(statements)
 }
+
 
 ///parses a variable declaration from the token stream
 fn parse_declaration(iter: &mut Peekable<Iter<Token>>) -> ASTNode {
@@ -212,90 +198,6 @@ fn expect_token(iter: &mut Peekable<Iter<Token>>, expected: Token) {
 }
 
 
-///parses an expression from the token stream
-fn parse_expr(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
-    parse_cmp(iter)
-}
-
-///parses a comparison expression from the token stream
-fn parse_cmp(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
-    let mut left = parse_add_sub(iter);
-
-    while let Some(token) = iter.peek() {
-        match token {
-            Token::Equal => {
-                iter.next();
-                let right = parse_add_sub(iter);
-                left = Box::new(Expr::Equal(left, right));
-            }
-            Token::Less => {
-                iter.next();
-                let right = parse_add_sub(iter);
-                left = Box::new(Expr::Less(left, right));
-            }
-            Token::Greater => {
-                iter.next();
-                let right = parse_add_sub(iter);
-                left = Box::new(Expr::Greater(left, right));
-            }
-            _ => break,
-        }
-    }
-
-    left
-}
-
-///parses an addition or subtraction expression from the token stream
-fn parse_add_sub(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
-    let mut left = parse_mul_div(iter);
-
-    while let Some(token) = iter.peek() {
-        match token {
-            Token::Plus => {
-                iter.next(); //consume '+'
-                let right = parse_mul_div(iter);
-                left = Box::new(Expr::Add(left, right));
-            }
-            Token::Minus => {
-                iter.next(); // consume '-'
-                let right = parse_mul_div(iter);
-                left = Box::new(Expr::Sub(left, right));
-            }
-            _ => break,
-        }
-    }
-
-    left
-}
-
-///parses a multiplication or division expression from the token stream
-fn parse_mul_div(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
-    let mut left = parse_primary(iter);
-
-    while let Some(token) = iter.peek() {
-        match token {
-            Token::Star => {
-                iter.next();
-                let right = parse_primary(iter);
-                left = Box::new(Expr::Mul(left, right));
-            }
-            Token::Divide => {
-                iter.next();
-                let right = parse_primary(iter);
-                left = Box::new(Expr::Div(left, right));
-            }
-            Token::Mod => {
-                iter.next();
-                let right = parse_primary(iter);
-                left = Box::new(Expr::Mod(left, right));
-            }
-            _ => break,
-        }
-    }
-
-    left
-}
-
 ///parses a primary expression from the token stream
 fn parse_primary(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     match iter.next() {
@@ -342,3 +244,53 @@ fn parse_primary(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
     }
 }
 
+///now handle '*' '/' '%' all at the same (high) precedence
+fn parse_term(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
+    let mut node = parse_primary(iter);
+    loop {
+        match iter.peek() {
+            Some(Token::Star) => {
+                iter.next();
+                let rhs = parse_primary(iter);
+                node = Box::new(Expr::Mul(node, rhs));
+            }
+            Some(Token::Div) => {
+                iter.next();
+                let rhs = parse_primary(iter);
+                node = Box::new(Expr::Div(node, rhs));
+            }
+            Some(Token::Mod) => {
+                iter.next();
+                let rhs = parse_primary(iter);
+                node = Box::new(Expr::Mod(node, rhs));
+            }
+            _ => break,
+        }
+    }
+    node
+}
+
+/// then handle '+' and '-' (lower precedence)
+fn parse_add(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
+    let mut node = parse_term(iter);
+    loop {
+        match iter.peek() {
+            Some(Token::Plus) => {
+                iter.next();
+                let rhs = parse_term(iter);
+                node = Box::new(Expr::Add(node, rhs));
+            }
+            Some(Token::Minus) => {
+                iter.next();
+                let rhs = parse_term(iter);
+                node = Box::new(Expr::Sub(node, rhs));
+            }
+            _ => break,
+        }
+    }
+    node
+}
+
+fn parse_expr(iter: &mut Peekable<Iter<Token>>) -> Box<Expr> {
+    parse_add(iter)
+}
