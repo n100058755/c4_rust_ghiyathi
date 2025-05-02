@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["expect_token","parse","parse_add","parse_assignment","parse_block","parse_declaration","parse_expr","parse_if","parse_primary","parse_stmt","parse_term","parse_while"]};
