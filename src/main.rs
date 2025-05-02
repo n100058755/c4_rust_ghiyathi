@@ -72,6 +72,8 @@ fn main() {
 #[cfg(test)]
 mod tests {
 
+    use clap::Parser;
+
     use crate::codegen::{ASTNode, Expr};
     use crate::lexer::{tokenize, Token};
     use crate::parser::parse;
@@ -513,5 +515,57 @@ mod tests {
             ])
         );
     }
+
+    use crate::Cli;
+
+    #[test]
+    fn test_cli_parse_no_flags() {
+        //only program name + input
+        let cli = Cli::parse_from(&["c4rust", "foo.c"]);
+        assert!(!cli.tokens);
+        assert!(!cli.ast);
+        assert!(!cli.trace);
+        assert_eq!(cli.input, "foo.c");
+    }
+
+    #[test]
+    fn test_cli_parse_tokens_flag() {
+        // --tokens should flip only the tokens flag
+        let cli = Cli::parse_from(&["c4rust", "--tokens", "foo.c"]);
+        assert!(cli.tokens);
+        assert!(!cli.ast);
+        assert!(!cli.trace);
+        assert_eq!(cli.input, "foo.c");
+    }
+
+    #[test]
+    fn test_cli_parse_ast_flag() {
+        // --ast should flip only the ast flag
+        let cli = Cli::parse_from(&["c4rust", "--ast", "foo.c"]);
+        assert!(!cli.tokens);
+        assert!(cli.ast);
+        assert!(!cli.trace);
+        assert_eq!(cli.input, "foo.c");
+    }
+
+    #[test]
+    fn test_cli_parse_trace_flag() {
+        // --trace should flip only the trace flag
+        let cli = Cli::parse_from(&["c4rust", "--trace", "foo.c"]);
+        assert!(!cli.tokens);
+        assert!(!cli.ast);
+        assert!(cli.trace);
+        assert_eq!(cli.input, "foo.c");
+    }
+
+    #[test]
+    fn test_cli_parse_all_flags() {
+        let cli = Cli::parse_from(&["c4rust", "--trace", "--tokens", "--ast", "foo.c"]);
+        assert!(cli.tokens);
+        assert!(cli.ast);
+        assert!(cli.trace);
+        assert_eq!(cli.input, "foo.c");
+    }
+
 
 }
