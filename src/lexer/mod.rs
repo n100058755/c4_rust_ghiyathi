@@ -1,5 +1,3 @@
-#![allow(dead_code)] //suppress warnings for unused opcodes
-
 ///tokens that are recognized by the lexer
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token { ///token types
@@ -110,11 +108,6 @@ pub fn tokenize(source: &str) -> Vec<Token> {
             '>' => { //greater than
                 chars.next();
                 tokens.push(Token::Greater);
-            }
-
-            ',' => { //comma
-                chars.next();
-                tokens.push(Token::Comma);
             }
 
             //string literal
